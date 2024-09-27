@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: ./tripa
+        working-directory: tripa
 
     steps:
       - uses: actions/checkout@v4
@@ -23,7 +23,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: ./decode-batch
+        working-directory: decode-batch
 
     steps:
       - name: Build
