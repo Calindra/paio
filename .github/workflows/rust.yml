@@ -6,11 +6,53 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build-tripa:
+  build:
     runs-on: ubuntu-latest
-    defaults:
-      run:
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install requirements
+        run: |
+          sudo apt-get update
+          sudo apt-get install protobuf-compiler libc6
+
+      - name: Build and test Tripa
         working-directory: tripa
+        run: |
+          cargo build
+          cargo test --verbose
+
+      - name: Build and test decode-batch
+        working-directory: decode-batch
+        run: |
+          cargo build
+          cargo test --verbose
+
+  release-windows:
+    needs: [build]
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install requirements
+        run: choco install protoc
+
+      - name: Build Tripa
+        working-directory: tripa
+        run: cargp build --release --target x86_64-pc-windows-msvc
+
+      - name: Build decode-batch
+        working-directory: decode-batch
+        run: cargp build --release --target x86_64-pc-windows-msvc
+
+      - name: Run tests
+        run: cargo test --verbose
+
+  release-linux:
+    needs: [build]
+    runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
@@ -23,39 +65,27 @@ jobs:
       - name: Install Cross
         run: cargo install cross
 
-      - name: Build
+      - name: Build Tripa
+        working-directory: tripa
         run: |
           cross build --release --target x86_64-unknown-linux-gnu
-          cross build --release --target aarch64-apple-darwin
           cross build --release --target riscv64gc-unknown-linux-gnu
-          cross build --release --target x86_64-pc-windows-msvc
 
-      - name: Run tests
-        run: cargo test --verbose
-
-  build-decode-batch:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
+      - name: Build Tripa
         working-directory: decode-batch
+        run: |
+          cross build --release --target x86_64-unknown-linux-gnu
+          cross build --release --target riscv64gc-unknown-linux-gnu
+
+  release-macos:
+    needs: [build]
+    runs-on: macos-latest
 
     steps:
       - uses: actions/checkout@v4
 
       - name: Install requirements
-        run: |
-          sudo apt-get update
-          sudo apt-get install libc6
-
-      - name: Install Cross
-        run: cargo install cross
+        run: brew install protobuf
 
       - name: Build
-        run: |
-          cross build --release --target x86_64-unknown-linux-gnu
-          cross build --release --target aarch64-apple-darwin
-          cross build --release --target riscv64gc-unknown-linux-gnu
-          cross build --release --target x86_64-pc-windows-msvc
-
-      - name: Run tests
-        run: cargo test --verbose
+        run: cargo build --release --target aarch64-apple-darwin
