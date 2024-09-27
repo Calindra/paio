@@ -6,14 +6,58 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build:
-
+  build-tripa:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: tripa
 
     steps:
-    - uses: actions/checkout@v4
-    
-    - name: Build
-      run: cargo build --verbose
-    - name: Run tests
-      run: cargo test --verbose
+      - uses: actions/checkout@v4
+
+      - name: Install requirements
+        run: |
+          sudo apt-get update
+          sudo apt-get install protobuf-compiler libc6
+
+      - name: Install Cross
+        run: cargo install cross
+
+      - name: Build
+        run: |
+          cross build --release --target x86_64-unknown-linux-gnu
+          cross build --release --target x86_64-apple-darwin
+          cross build --release --target aarch64-apple-darwin
+          cross build --release --target riscv64gc-unknown-linux-gnu
+          cross build --release --target x86_64-pc-windows-msvc
+
+      - name: Run tests
+        run: cargo test --verbose
+
+  build-decode-batch:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: decode-batch
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install requirements
+        run: |
+          sudo apt-get update
+          sudo apt-get install libc6
+
+      - name: Install Cross
+        run: cargo install cross
+
+      - name: Build
+        run: |
+          cross build --release --target x86_64-unknown-linux-gnu
+          cross build --release --target x86_64-apple-darwin
+          cross build --release --target aarch64-apple-darwin
+          cross build --release --target riscv64gc-unknown-linux-gnu
+          cross build --release --target x86_64-pc-windows-msvc
+
+      - name: Run tests
+        run: cargo test --verbose
