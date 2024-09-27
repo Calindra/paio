@@ -26,7 +26,8 @@ jobs:
         working-directory: decode-batch
 
     steps:
-      - run: ls -lah
+      - uses: actions/checkout@v4
+
       - name: Build
         run: cargo build --verbose
       - name: Run tests
