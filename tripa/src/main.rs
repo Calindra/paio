@@ -585,7 +585,7 @@ mod tests {
     };
     use http_body_util::BodyExt; // for `collect`
     use message::{SignedTransaction, SigningMessage, WireTransaction, DOMAIN};
-    use mime;
+    // use mime;
     use serde_json::json;
     use tower::Service;
     use tower::ServiceExt; // for `call`, `oneshot`, and `ready`
