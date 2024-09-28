@@ -38,7 +38,3 @@ es-version = { git = "https://github.com/EspressoSystems/es-version.git", branch
 celestia-rpc = { git = "https://github.com/eigerco/lumina" }
 celestia-types = { git = "https://github.com/eigerco/lumina" }
 hex = "0.4.3"
-
-
-[patch.crates-io]
-ring = { git = "https://github.com/briansmith/ring", branch = "main" }
