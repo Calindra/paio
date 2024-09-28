@@ -69,7 +69,7 @@ jobs:
         working-directory: tripa
         run: |
           cp -v config_default.toml config.toml
-          ${{ matrix.command }} build --release --verbose --target ${{ matrix.target}}
+          ${{ matrix.command }} build --release --verbose --target ${{ matrix.target }}
 
       - name: Test tripa (Linux x86_64)
         if: matrix.target == 'x86_64-unknown-linux-gnu'
@@ -78,7 +78,7 @@ jobs:
 
       - name: Build decode-batch
         working-directory: decode-batch
-        run: ${{ matrix.command }} build --release --verbose --target ${{ matrix.target}}
+        run: ${{ matrix.command }} build --release --verbose --target ${{ matrix.target }}
 
       - name: Test decode-batch (Linux x86_64)
         if: matrix.target == 'x86_64-unknown-linux-gnu'
