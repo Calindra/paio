@@ -67,26 +67,26 @@ jobs:
         run: |
           sudo dpkg --add-architecture riscv64
           sudo apt-get update
-          sudo apt-get install protobuf-compiler libc6 libssl-dev:riscv64 libssl-dev pkg-config
+          sudo apt-get install protobuf-compiler libc6 libssl-dev:riscv64 libssl-dev pkg-config g++-riscv64-linux-gnu
 
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
 
-      - name: Install Cross
-        run: cargo install cross
+      - name: Add riscv64 target
+        run: rustup target add riscv64gc-unknown-linux-gnu
 
       - name: Build Tripa
         working-directory: tripa
         run: |
           cp -v config_default.toml config.toml
-          cross build --release --target x86_64-unknown-linux-gnu
-          cross build --release --target riscv64gc-unknown-linux-gnu
+          cargo build --release --target x86_64-unknown-linux-gnu
+          cargo build --release --target riscv64gc-unknown-linux-gnu
 
       - name: Build decode-batch
         working-directory: decode-batch
         run: |
-          cross build --release --target x86_64-unknown-linux-gnu
-          cross build --release --target riscv64gc-unknown-linux-gnu
+          cargo build --release --target x86_64-unknown-linux-gnu
+          cargo build --release --target riscv64gc-unknown-linux-gnu
 
   release-macos:
     needs: [build]
