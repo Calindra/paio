@@ -65,8 +65,9 @@ jobs:
 
       - name: Install requirements
         run: |
+          sudo dpkg --add-architecture riscv64
           sudo apt-get update
-          sudo apt-get install protobuf-compiler libc6 libssl-dev openssl pkg-config
+          sudo apt-get install protobuf-compiler libc6 libssl-dev:riscv64 libssl-dev pkg-config
 
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
