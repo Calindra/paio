@@ -1,0 +1,116 @@
+name: Rust
+
+on:
+  push:
+    branches:
+        - main
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    runs-on: ${{ matrix.runner }}
+
+    strategy:
+      matrix:
+        include:
+          - name: Linux-amd64
+            runner: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            command: cargo
+          # Versions of ring is not supported on riscv64
+          # used by rustls, rustls-webpki, sct, webpki
+          # - name: Linux-riscv64
+          #   runner: ubuntu-latest
+          #   target: riscv64gc-unknown-linux-gnu
+          #   command: cross
+          - name: MacOS
+            runner: macos-latest
+            target: aarch64-apple-darwin
+            command: cargo
+          - name: Windows
+            runner: windows-latest
+            target: x86_64-pc-windows-msvc
+            command: cargo
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install requirements (Linux)
+        if: matrix.runner == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install protobuf-compiler libc6
+      - name: Install requirements (MacOS)
+        if: matrix.runner == 'macos-latest'
+        run: brew install protobuf
+      - name: Install requirements (Windows)
+        if: matrix.runner == 'windows-latest'
+        run: choco install protoc
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: "${{ matrix.target }}"
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+
+      # Only install cross if we need it
+      # Install via cargo-binstall which I found faster
+      - name: Install Cross
+        if: matrix.command == 'cross'
+        shell: bash
+        run: |
+          curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
+          cargo binstall --no-confirm cross
+
+      - name: Build Tripa
+        working-directory: tripa
+        run: |
+          cp -v config_default.toml config.toml
+          ${{ matrix.command }} build --release --verbose --target ${{ matrix.target }}
+
+      - name: Test tripa (Linux x86_64)
+        working-directory: tripa
+        run: cargo test --verbose || true
+
+      - name: Build decode-batch
+        working-directory: decode-batch
+        run: ${{ matrix.command }} build --release --verbose --target ${{ matrix.target }}
+
+      - name: Test decode-batch (Linux x86_64)
+        working-directory: decode-batch
+        run: cargo test --verbose || true
+
+      - name: Checksum artifacts
+        id: checksum-artifacts
+        run: |
+          BIN_SUFFIX=""
+          if [[ "${{ matrix.runner }}" == "windows-latest" ]]; then
+            BIN_SUFFIX=".exe"
+          fi
+
+          echo "BIN_SUFFIX=${BIN_SUFFIX}" >> "$GITHUB_OUTPUT"
+
+          cp -v tripa/target/${{ matrix.target }}/release/tripa${BIN_SUFFIX} tripa-${{ matrix.target }}${BIN_SUFFIX}
+          cp -v decode-batch/target/${{ matrix.target }}/release/decode-batch${BIN_SUFFIX} decode-batch-${{ matrix.target }}${BIN_SUFFIX}
+
+          sha256sum tripa-${{ matrix.target }}${BIN_SUFFIX} decode-batch-${{ matrix.target }}${BIN_SUFFIX} > SHA256SUMS
+
+      - name: Release
+        env:
+          BIN_SUFFIX: ${{ steps.checksum-artifacts.outputs.BIN_SUFFIX }}
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            tripa-${{ matrix.target }}${{ env.BIN_SUFFIX }}
+            decode-batch-${{ matrix.target }}${{ env.BIN_SUFFIX }}
+            SHA256SUMS
