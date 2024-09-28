@@ -1,7 +1,0 @@
-[target.riscv64gc-unknown-linux-gnu]
-rustflags = ["-C", "target-feature=+crt-static"]
-linker = "riscv64-linux-gnu-g++"
-pre-build = [
-    "dpkg --add-architecture $CROSS_DEB_ARCH",
-    "apt-get update && apt-get --assume-yes install g++-riscv64-linux-gnu libssl-dev:$CROSS_DEB_ARCH",
-]
