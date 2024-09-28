@@ -2,6 +2,10 @@ name: Rust
 
 on: push
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   CARGO_TERM_COLOR: always
 
@@ -15,7 +19,7 @@ jobs:
       - name: Install requirements
         run: |
           sudo apt-get update
-          sudo apt-get install protobuf-compiler libc6 libssl-dev openssl pkg-config
+          sudo apt-get install protobuf-compiler
 
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
@@ -60,33 +64,44 @@ jobs:
     needs: [build]
     runs-on: ubuntu-latest
 
+    strategy:
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            command: cargo
+          - target: aarch64-unknown-linux-gnu
+            command: cross
+
     steps:
       - uses: actions/checkout@v4
 
       - name: Install requirements
         run: |
-          sudo dpkg --add-architecture riscv64
           sudo apt-get update
-          sudo apt-get install protobuf-compiler libc6 libssl-dev:riscv64 libssl-dev pkg-config g++-riscv64-linux-gnu
+          sudo apt-get install protobuf-compiler
 
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
 
-      - name: Add riscv64 target
-        run: rustup target add riscv64gc-unknown-linux-gnu
+      # Only install cross if we need it
+      # Install via cargo-binstall which I found faster
+      - name: Install Cross
+        if: matrix.command == 'cross'
+        shell: bash
+        run: |
+          curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
+          cargo binstall --no-confirm cross
 
       - name: Build Tripa
         working-directory: tripa
         run: |
           cp -v config_default.toml config.toml
-          cargo build --release --target x86_64-unknown-linux-gnu
-          cargo build --release --target riscv64gc-unknown-linux-gnu
+          ${{ matrix.command }} build --verbose --release --target ${{ matrix.target }}
 
       - name: Build decode-batch
         working-directory: decode-batch
         run: |
-          cargo build --release --target x86_64-unknown-linux-gnu
-          cargo build --release --target riscv64gc-unknown-linux-gnu
+          ${{ matrix.command }} build --verbose --release --target ${{ matrix.target }}
 
   release-macos:
     needs: [build]
