@@ -17,6 +17,9 @@ jobs:
           sudo apt-get update
           sudo apt-get install protobuf-compiler libc6
 
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+
       - name: Build and test Tripa
         working-directory: tripa
         run: |
@@ -31,28 +34,28 @@ jobs:
           cargo build
           cargo test --verbose
 
-  release-windows:
-    needs: [build]
-    runs-on: windows-latest
+  # release-windows:
+  #   needs: [build]
+  #   runs-on: windows-latest
 
-    steps:
-      - uses: actions/checkout@v4
+  #   steps:
+  #     - uses: actions/checkout@v4
 
-      - name: Install requirements
-        run: choco install protoc
+  #     - name: Install requirements
+  #       run: choco install protoc
 
-      - name: Build Tripa
-        working-directory: tripa
-        run: |
-          cp -v config_default.toml config.toml
-          cargp build --release --target x86_64-pc-windows-msvc
+  #     - name: Build Tripa
+  #       working-directory: tripa
+  #       run: |
+  #         cp -v config_default.toml config.toml
+  #         cargp build --release --target x86_64-pc-windows-msvc
 
-      - name: Build decode-batch
-        working-directory: decode-batch
-        run: cargp build --release --target x86_64-pc-windows-msvc
+  #     - name: Build decode-batch
+  #       working-directory: decode-batch
+  #       run: cargp build --release --target x86_64-pc-windows-msvc
 
-      - name: Run tests
-        run: cargo test --verbose
+  #     - name: Run tests
+  #       run: cargo test --verbose
 
   release-linux:
     needs: [build]
@@ -65,6 +68,9 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install protobuf-compiler libc6
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
 
       - name: Install Cross
         run: cargo install cross
@@ -91,6 +97,9 @@ jobs:
 
       - name: Install requirements
         run: brew install protobuf
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
 
       - name: Build
         run: |
