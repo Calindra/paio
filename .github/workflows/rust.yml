@@ -15,7 +15,7 @@ jobs:
       - name: Install requirements
         run: |
           sudo apt-get update
-          sudo apt-get install protobuf-compiler libc6
+          sudo apt-get install protobuf-compiler libc6 libssl-dev openssl pkg-config
 
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
@@ -66,7 +66,7 @@ jobs:
       - name: Install requirements
         run: |
           sudo apt-get update
-          sudo apt-get install protobuf-compiler libc6 libssl-dev pkg-config
+          sudo apt-get install protobuf-compiler libc6 libssl-dev openssl pkg-config
 
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
