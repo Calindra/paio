@@ -11,74 +11,47 @@ env:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install requirements
-        run: |
-          sudo apt-get update
-          sudo apt-get install protobuf-compiler libc6
-
-      - name: Install Foundry
-        uses: foundry-rs/foundry-toolchain@v1
-
-      - name: Build and test Tripa
-        working-directory: tripa
-        run: |
-          cp -v config_default.toml config.toml
-          cargo build
-          cargo test --verbose || true
-
-      - name: Build and test decode-batch
-        working-directory: decode-batch
-        run: |
-          cargo build
-          cargo test --verbose || true
-
-  # release-windows:
-  #   needs: [build]
-  #   runs-on: windows-latest
-
-  #   steps:
-  #     - uses: actions/checkout@v4
-
-  #     - name: Install requirements
-  #       run: choco install protoc
-
-  #     - name: Build Tripa
-  #       working-directory: tripa
-  #       run: |
-  #         cp -v config_default.toml config.toml
-  #         cargp build --release --target x86_64-pc-windows-msvc
-
-  #     - name: Build decode-batch
-  #       working-directory: decode-batch
-  #       run: cargp build --release --target x86_64-pc-windows-msvc
-
-  #     - name: Run tests
-  #       run: cargo test --verbose
-
-  release-linux:
-    needs: [build]
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runner }}
 
     strategy:
       matrix:
         include:
-          - target: x86_64-unknown-linux-gnu
+          - name: Linux-amd64
+            runner: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
             command: cargo
-          - target: aarch64-unknown-linux-gnu
+          - name: Linux-riscv64
+            runner: ubuntu-latest
+            target: riscv64gc-unknown-linux-gnu
             command: cross
+          - name: MacOS
+            runner: macos-latest
+            target: aarch64-apple-darwin
+            command: cargo
+          - name: Windows
+            runner: windows-latest
+            target: x86_64-pc-windows-msvc
+            command: cargo
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install requirements
+      - name: Install requirements (Linux)
+        if: matrix.runner == 'ubuntu-latest'
         run: |
           sudo apt-get update
           sudo apt-get install protobuf-compiler libc6
+      - name: Install requirements (MacOS)
+        if: matrix.runner == 'macos-latest'
+        run: brew install protobuf
+      - name: Install requirements (Windows)
+        if: matrix.runner == 'windows-latest'
+        run: choco install protoc
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: "${{ matrix.target }}"
 
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
@@ -96,32 +69,18 @@ jobs:
         working-directory: tripa
         run: |
           cp -v config_default.toml config.toml
-          ${{ matrix.command }} build --verbose --release --target ${{ matrix.target }}
+          ${{ matrix.command }} build --release --verbose --target ${{ matrix.target}}
 
-      - name: Build decode-batch
-        working-directory: decode-batch
-        run: |
-          ${{ matrix.command }} build --verbose --release --target ${{ matrix.target }}
-
-  release-macos:
-    needs: [build]
-    runs-on: macos-latest
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install requirements
-        run: brew install protobuf
-
-      - name: Install Foundry
-        uses: foundry-rs/foundry-toolchain@v1
-
-      - name: Build Tripa
+      - name: Test tripa (Linux x86_64)
+        if: matrix.target == 'x86_64-unknown-linux-gnu'
         working-directory: tripa
-        run: |
-          cp -v config_default.toml config.toml
-          cargo build --release --target aarch64-apple-darwin
+        run: cargo test --verbose || true
 
       - name: Build decode-batch
         working-directory: decode-batch
-        run: cargo build --release --target aarch64-apple-darwin
+        run: ${{ matrix.command }} build --release --verbose --target ${{ matrix.target}}
+
+      - name: Test decode-batch (Linux x86_64)
+        if: matrix.target == 'x86_64-unknown-linux-gnu'
+        working-directory: decode-batch
+        run: cargo test --verbose || true
