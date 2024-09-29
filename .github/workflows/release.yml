@@ -15,7 +15,7 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build:
+  release:
     runs-on: ${{ matrix.runner }}
 
     strategy:
@@ -31,11 +31,11 @@ jobs:
           #   runner: ubuntu-latest
           #   target: riscv64gc-unknown-linux-gnu
           #   command: cross
-          - name: MacOS
+          - name: MacOS-arm64
             runner: macos-latest
             target: aarch64-apple-darwin
             command: cargo
-          - name: Windows
+          - name: Windows-amd64
             runner: windows-latest
             target: x86_64-pc-windows-msvc
             command: cargo
@@ -43,15 +43,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install requirements (Linux)
+      - name: Install requirements (${{ matrix.name }})
         if: matrix.runner == 'ubuntu-latest'
         run: |
           sudo apt-get update
           sudo apt-get install protobuf-compiler
-      - name: Install requirements (MacOS)
+      - name: Install requirements (${{ matrix.name }})
         if: matrix.runner == 'macos-latest'
         run: brew install protobuf
-      - name: Install requirements (Windows)
+      - name: Install requirements (${{ matrix.name }})
         if: matrix.runner == 'windows-latest'
         run: choco install protoc
 
@@ -73,11 +73,11 @@ jobs:
           cargo binstall --no-confirm cross
 
       # TODO: Remove true after fix tests
-      - name: Test tripa (Linux x86_64)
+      - name: Test tripa (${{ matrix.name }})
         working-directory: tripa
         run: cargo test --no-fail-fast || true
 
-      - name: Test decode-batch (Linux x86_64)
+      - name: Test decode-batch (${{ matrix.name }})
         working-directory: decode-batch
         run: cargo test --no-fail-fast
 
@@ -91,8 +91,8 @@ jobs:
         working-directory: decode-batch
         run: ${{ matrix.command }} build --release --target ${{ matrix.target }}
 
-      - name: Checksum artifacts
-        id: checksum-artifacts
+      - name: Copy binaries
+        id: copy-binaries
         run: |
           BIN_SUFFIX=""
           if [[ "${{ matrix.runner }}" == "windows-latest" ]]; then
@@ -104,15 +104,26 @@ jobs:
           cp -v target/${{ matrix.target }}/release/tripa${BIN_SUFFIX} tripa-${{ matrix.target }}${BIN_SUFFIX}
           cp -v target/${{ matrix.target }}/release/decode-batch${BIN_SUFFIX} decode-batch-${{ matrix.target }}${BIN_SUFFIX}
 
-          sha256sum tripa-${{ matrix.target }}${BIN_SUFFIX} decode-batch-${{ matrix.target }}${BIN_SUFFIX} > SHA256SUMS
+      - name: Generate checksum (${{ matrix.name }})
+        if: matrix.runner == 'ubuntu-latest'
+        run: sha512sum tripa-${{ matrix.target }} decode-batch-${{ matrix.target }} > SHA512SUMS.txt
+
+      - name: Generate checksum (${{ matrix.name }})
+        if: matrix.runner == 'macos-latest'
+        run: shasum -a 512 tripa-${{ matrix.target }} decode-batch-${{ matrix.target }} > SHA512SUMS.txt
+
+      - name: Generate checksum (${{ matrix.name }})
+        if: matrix.runner == 'windows-latest'
+        run: Get-FileHash tripa-${{ matrix.target }}.exe decode-batch-${{ matrix.target }}.exe -Algorithm SHA512 | Out-File -FilePath SHA512SUMS.txt
 
       - name: Release
         env:
-          BIN_SUFFIX: ${{ steps.checksum-artifacts.outputs.BIN_SUFFIX }}
+          BIN_SUFFIX: ${{ steps.copy-binaries.outputs.BIN_SUFFIX }}
         uses: softprops/action-gh-release@v2
         with:
+          fail_on_unmatched_files: true
           prerelease: true
           files: |
             tripa-${{ matrix.target }}${{ env.BIN_SUFFIX }}
             decode-batch-${{ matrix.target }}${{ env.BIN_SUFFIX }}
-            SHA256SUMS
+            SHA512SUMS.txt
