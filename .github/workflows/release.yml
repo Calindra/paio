@@ -87,10 +87,9 @@ jobs:
         working-directory: decode-batch
         run: ${{ matrix.command }} build --release --target ${{ matrix.target }}
 
-      # TODO: Remove true after fix tests
       - name: Test decode-batch (Linux x86_64)
         working-directory: decode-batch
-        run: cargo test || true
+        run: cargo test
 
       - name: Checksum artifacts
         id: checksum-artifacts

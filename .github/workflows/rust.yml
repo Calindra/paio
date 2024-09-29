@@ -51,16 +51,17 @@ jobs:
         working-directory: tripa
         run: |
           cp -v config_default.toml config.toml
-          ${{ matrix.command }} build --release --verbose --target ${{ matrix.target }}
+          ${{ matrix.command }} build --release --target ${{ matrix.target }}
 
+      # TODO: Remove true after fix tests
       - name: Test tripa (Linux x86_64)
         working-directory: tripa
-        run: cargo test --verbose || true
+        run: cargo test || true
 
       - name: Build decode-batch
         working-directory: decode-batch
-        run: ${{ matrix.command }} build --release --verbose --target ${{ matrix.target }}
+        run: ${{ matrix.command }} build --release --target ${{ matrix.target }}
 
       - name: Test decode-batch (Linux x86_64)
         working-directory: decode-batch
-        run: cargo test --verbose || true
+        run: cargo test
