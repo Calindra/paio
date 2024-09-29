@@ -47,7 +47,7 @@ jobs:
         if: matrix.runner == 'ubuntu-latest'
         run: |
           sudo apt-get update
-          sudo apt-get install protobuf-compiler libc6
+          sudo apt-get install protobuf-compiler
       - name: Install requirements (MacOS)
         if: matrix.runner == 'macos-latest'
         run: brew install protobuf
@@ -75,21 +75,21 @@ jobs:
       # TODO: Remove true after fix tests
       - name: Test tripa (Linux x86_64)
         working-directory: tripa
-        run: cargo test || true
+        run: cargo test --no-fail-fast || true
 
       - name: Test decode-batch (Linux x86_64)
         working-directory: decode-batch
-        run: cargo test
+        run: cargo test --no-fail-fast
 
       - name: Build Tripa
         working-directory: tripa
         run: |
           cp -v config_default.toml config.toml
-          ${{ matrix.command }} build --verbose --release --target ${{ matrix.target }}
+          ${{ matrix.command }} build --release --target ${{ matrix.target }}
 
       - name: Build decode-batch
         working-directory: decode-batch
-        run: ${{ matrix.command }} build --verbose --release --target ${{ matrix.target }}
+        run: ${{ matrix.command }} build --release --target ${{ matrix.target }}
 
       - name: Checksum artifacts
         id: checksum-artifacts
@@ -101,10 +101,8 @@ jobs:
 
           echo "BIN_SUFFIX=${BIN_SUFFIX}" >> "$GITHUB_OUTPUT"
 
-          ls -l
-
-          cp -v tripa/target/${{ matrix.target }}/release/tripa${BIN_SUFFIX} tripa-${{ matrix.target }}${BIN_SUFFIX}
-          cp -v decode-batch/target/${{ matrix.target }}/release/decode-batch${BIN_SUFFIX} decode-batch-${{ matrix.target }}${BIN_SUFFIX}
+          cp -v target/${{ matrix.target }}/release/tripa${BIN_SUFFIX} tripa-${{ matrix.target }}${BIN_SUFFIX}
+          cp -v target/${{ matrix.target }}/release/decode-batch${BIN_SUFFIX} decode-batch-${{ matrix.target }}${BIN_SUFFIX}
 
           sha256sum tripa-${{ matrix.target }}${BIN_SUFFIX} decode-batch-${{ matrix.target }}${BIN_SUFFIX} > SHA256SUMS
 
@@ -113,6 +111,7 @@ jobs:
           BIN_SUFFIX: ${{ steps.checksum-artifacts.outputs.BIN_SUFFIX }}
         uses: softprops/action-gh-release@v2
         with:
+          prerelease: true
           files: |
             tripa-${{ matrix.target }}${{ env.BIN_SUFFIX }}
             decode-batch-${{ matrix.target }}${{ env.BIN_SUFFIX }}
