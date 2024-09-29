@@ -72,24 +72,24 @@ jobs:
           curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
           cargo binstall --no-confirm cross
 
+      # TODO: Remove true after fix tests
+      - name: Test tripa (Linux x86_64)
+        working-directory: tripa
+        run: cargo test || true
+
+      - name: Test decode-batch (Linux x86_64)
+        working-directory: decode-batch
+        run: cargo test
+
       - name: Build Tripa
         working-directory: tripa
         run: |
           cp -v config_default.toml config.toml
           ${{ matrix.command }} build --verbose --release --target ${{ matrix.target }}
 
-      # TODO: Remove true after fix tests
-      - name: Test tripa (Linux x86_64)
-        working-directory: tripa
-        run: cargo test || true
-
       - name: Build decode-batch
         working-directory: decode-batch
         run: ${{ matrix.command }} build --verbose --release --target ${{ matrix.target }}
-
-      - name: Test decode-batch (Linux x86_64)
-        working-directory: decode-batch
-        run: cargo test
 
       - name: Checksum artifacts
         id: checksum-artifacts
@@ -101,13 +101,7 @@ jobs:
 
           echo "BIN_SUFFIX=${BIN_SUFFIX}" >> "$GITHUB_OUTPUT"
 
-          ls -l tripa/target/
-          ls -l tripa/target/${{ matrix.target }}
-          ls -l tripa/target/${{ matrix.target }}/release/
-
-          ls -l decode-batch/target/
-          ls -l decode-batch/target/${{ matrix.target }}
-          ls -l decode-batch/target/${{ matrix.target }}/release/
+          ls -l
 
           cp -v tripa/target/${{ matrix.target }}/release/tripa${BIN_SUFFIX} tripa-${{ matrix.target }}${BIN_SUFFIX}
           cp -v decode-batch/target/${{ matrix.target }}/release/decode-batch${BIN_SUFFIX} decode-batch-${{ matrix.target }}${BIN_SUFFIX}
