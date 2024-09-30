@@ -15,8 +15,36 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install requirements
+        run: |
+          sudo apt-get update
+          sudo apt-get install protobuf-compiler
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Foundry
+        uses:
+          foundry-rs/foundry-toolchain@v1
+
+      # TODO: Remove true after fix tests
+      - name: Test tripa (Linux)
+        working-directory: tripa
+        run: cargo test --no-fail-fast || true
+
+      - name: Test decode-batch (Linux)
+        working-directory: decode-batch
+        run: cargo test --no-fail-fast
+
   release:
     runs-on: ${{ matrix.runner }}
+    needs: test
 
     strategy:
       matrix:
@@ -71,15 +99,6 @@ jobs:
         run: |
           curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
           cargo binstall --no-confirm cross
-
-      # TODO: Remove true after fix tests
-      - name: Test tripa (${{ matrix.name }})
-        working-directory: tripa
-        run: cargo test --no-fail-fast || true
-
-      - name: Test decode-batch (${{ matrix.name }})
-        working-directory: decode-batch
-        run: cargo test --no-fail-fast
 
       - name: Build Tripa
         working-directory: tripa
