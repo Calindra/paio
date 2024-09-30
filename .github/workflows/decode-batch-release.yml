@@ -1,0 +1,131 @@
+name: Decode release
+
+on:
+  push:
+    # branches:
+    #     - main
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Test decode-batch (Linux)
+        working-directory: decode-batch
+        run: cargo test --no-fail-fast
+
+  release:
+    runs-on: ${{ matrix.runner }}
+    needs: test
+
+    strategy:
+      matrix:
+        include:
+          - name: Linux-amd64
+            runner: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            command: cargo
+          # Versions of ring is not supported on riscv64
+          # used by rustls, rustls-webpki, sct, webpki
+          # - name: Linux-riscv64
+          #   runner: ubuntu-latest
+          #   target: riscv64gc-unknown-linux-gnu
+          #   command: cross
+          - name: Linux-arm64
+            runner: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            command: cargo
+          - name: MacOS-amd64
+            runner: macos-latest
+            target: x86_64-apple-darwin
+            command: cargo
+          - name: MacOS-arm64
+            runner: macos-latest
+            target: aarch64-apple-darwin
+            command: cargo
+          - name: Windows-amd64
+            runner: windows-latest
+            target: x86_64-pc-windows-msvc
+            command: cargo
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: "${{ matrix.target }}"
+
+      - name: Setup Cache
+        uses: Swatinem/rust-cache@v2
+
+      # Only install cross if we need it
+      # Install via cargo-binstall which I found faster
+      - name: Install Cross
+        if: matrix.command == 'cross'
+        shell: bash
+        run: |
+          curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
+          cargo binstall --no-confirm cross
+
+      - name: Build decode-batch
+        working-directory: decode-batch
+        run: ${{ matrix.command }} build --release --target ${{ matrix.target }}
+
+      - name: Generate artifacts
+        id: generate-artifacts
+        if: matrix.runner == 'ubuntu-latest' || matrix.runner == 'macos-latest'
+        shell: bash
+        run: |
+          cp -v target/${{ matrix.target }}/release/decode-batch decode-batch-${{ matrix.target }}
+
+      - name: Generate artifacts (Windows)
+        if: matrix.runner == 'windows-latest'
+        run: |
+          cp -v target/${{ matrix.target }}/release/decode-batch.exe decode-batch-${{ matrix.target }}.exe
+
+      - name: Generate checksum (Linux)
+        if: matrix.runner == 'ubuntu-latest'
+        run: sha512sum decode-batch-${{ matrix.target }} > decode-batch-${{ matrix.target }}.sha512
+
+      - name: Generate checksum (MacOS)
+        if: matrix.runner == 'macos-latest'
+        run: shasum -a 512 decode-batch-${{ matrix.target }} > decode-batch-${{ matrix.target }}.sha512
+
+      - name: Generate checksum (Windows)
+        if: matrix.runner == 'windows-latest'
+        run: Get-FileHash decode-batch-${{ matrix.target }}.exe -Algorithm SHA512 | Out-File -FilePath decode-batch-${{ matrix.target }}.sha512
+
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        if: matrix.runner == 'ubuntu-latest' || matrix.runner == 'macos-latest'
+        with:
+          fail_on_unmatched_files: true
+          prerelease: true
+          files: |
+            decode-batch-${{ matrix.target }}
+            decode-batch-${{ matrix.target }}.sha512
+
+      - name: Release (Windows)
+        if: matrix.runner == 'windows-latest'
+        uses: softprops/action-gh-release@v2
+        with:
+          fail_on_unmatched_files: true
+          prerelease: true
+          files: |
+            decode-batch-${{ matrix.target }}.exe
+            decode-batch-${{ matrix.target }}.sha512
