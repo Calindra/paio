@@ -120,8 +120,8 @@ jobs:
       - name: Copy binaries (Windows)
         if: matrix.runner == 'windows-latest'
         run: |
-          Copy-Item -Path target/${{ matrix.target }}/release/tripa.exe -Destination tripa-${{ matrix.target }}.exe
-          Copy-Item -Path target/${{ matrix.target }}/release/decode-batch.exe -Destination decode-batch-${{ matrix.target }}.exe
+          Copy-Item -Path target\${{ matrix.target }}\release\tripa.exe -Destination tripa-${{ matrix.target }}.exe
+          Copy-Item -Path target\${{ matrix.target }}\release\decode-batch.exe -Destination decode-batch-${{ matrix.target }}.exe
 
       - name: Generate checksum (Linux)
         if: matrix.runner == 'ubuntu-latest'
