@@ -30,8 +30,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Install Foundry
-        uses:
-          foundry-rs/foundry-toolchain@v1
+        uses: foundry-rs/foundry-toolchain@v1
 
       # TODO: Remove true after fix tests
       - name: Test tripa (Linux)
@@ -63,10 +62,10 @@ jobs:
             runner: macos-latest
             target: aarch64-apple-darwin
             command: cargo
-          - name: Windows-amd64
-            runner: windows-latest
-            target: x86_64-pc-windows-msvc
-            command: cargo
+          # - name: Windows-amd64
+          #   runner: windows-latest
+          #   target: x86_64-pc-windows-msvc
+          #   command: cargo
 
     steps:
       - uses: actions/checkout@v4
@@ -120,8 +119,9 @@ jobs:
       - name: Copy binaries (Windows)
         if: matrix.runner == 'windows-latest'
         run: |
-          Copy-Item -Path target\${{ matrix.target }}\release\tripa.exe -Destination tripa-${{ matrix.target }}.exe
-          Copy-Item -Path target\${{ matrix.target }}\release\decode-batch.exe -Destination decode-batch-${{ matrix.target }}.exe
+          Get-ChildItem -Recurse -Path .\target
+          Copy-Item -Path .\target\${{ matrix.target }}\release\tripa.exe -Destination .\tripa-${{ matrix.target }}.exe
+          Copy-Item -Path .\target\${{ matrix.target }}\release\decode-batch.exe -Destination .\decode-batch-${{ matrix.target }}.exe
 
       - name: Generate checksum (Linux)
         if: matrix.runner == 'ubuntu-latest'
