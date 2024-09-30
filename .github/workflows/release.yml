@@ -43,15 +43,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install requirements (${{ matrix.name }})
+      - name: Install requirements (Linux)
         if: matrix.runner == 'ubuntu-latest'
         run: |
           sudo apt-get update
           sudo apt-get install protobuf-compiler
-      - name: Install requirements (${{ matrix.name }})
+      - name: Install requirements (MacOS)
         if: matrix.runner == 'macos-latest'
         run: brew install protobuf
-      - name: Install requirements (${{ matrix.name }})
+      - name: Install requirements (Windows)
         if: matrix.runner == 'windows-latest'
         run: choco install protoc
 
@@ -93,37 +93,47 @@ jobs:
 
       - name: Copy binaries
         id: copy-binaries
+        if: matrix.runner == 'ubuntu-latest' || matrix.runner == 'macos-latest'
         run: |
-          BIN_SUFFIX=""
-          if [[ "${{ matrix.runner }}" == "windows-latest" ]]; then
-            BIN_SUFFIX=".exe"
-          fi
+          cp -v target/${{ matrix.target }}/release/tripa tripa-${{ matrix.target }}
+          cp -v target/${{ matrix.target }}/release/decode-batch decode-batch-${{ matrix.target }}
 
-          echo "BIN_SUFFIX=${BIN_SUFFIX}" >> "$GITHUB_OUTPUT"
-
-          cp -v target/${{ matrix.target }}/release/tripa${BIN_SUFFIX} tripa-${{ matrix.target }}${BIN_SUFFIX}
-          cp -v target/${{ matrix.target }}/release/decode-batch${BIN_SUFFIX} decode-batch-${{ matrix.target }}${BIN_SUFFIX}
-
-      - name: Generate checksum (${{ matrix.name }})
-        if: matrix.runner == 'ubuntu-latest'
-        run: sha512sum tripa-${{ matrix.target }} decode-batch-${{ matrix.target }} > SHA512SUMS.txt
-
-      - name: Generate checksum (${{ matrix.name }})
-        if: matrix.runner == 'macos-latest'
-        run: shasum -a 512 tripa-${{ matrix.target }} decode-batch-${{ matrix.target }} > SHA512SUMS.txt
-
-      - name: Generate checksum (${{ matrix.name }})
+      - name: Copy binaries (Windows)
         if: matrix.runner == 'windows-latest'
-        run: Get-FileHash tripa-${{ matrix.target }}.exe decode-batch-${{ matrix.target }}.exe -Algorithm SHA512 | Out-File -FilePath SHA512SUMS.txt
+        run: |
+          Copy-Item -Path target/${{ matrix.target }}/release/tripa.exe -Destination tripa-${{ matrix.target }}.exe
+          Copy-Item -Path target/${{ matrix.target }}/release/decode-batch.exe -Destination decode-batch-${{ matrix.target }}.exe
+
+      - name: Generate checksum (Linux)
+        if: matrix.runner == 'ubuntu-latest'
+        run: sha512sum tripa-${{ matrix.target }} decode-batch-${{ matrix.target }} > SHA512SUMS-${{ matrix.target }}.txt
+
+      - name: Generate checksum (MacOS)
+        if: matrix.runner == 'macos-latest'
+        run: shasum -a 512 tripa-${{ matrix.target }} decode-batch-${{ matrix.target }} > SHA512SUMS-${{ matrix.target }}.txt
+
+      - name: Generate checksum (Windows)
+        if: matrix.runner == 'windows-latest'
+        run: Get-FileHash tripa-${{ matrix.target }}.exe decode-batch-${{ matrix.target }}.exe -Algorithm SHA512 | Out-File -FilePath SHA512SUMS-${{ matrix.target }}.txt
 
       - name: Release
-        env:
-          BIN_SUFFIX: ${{ steps.copy-binaries.outputs.BIN_SUFFIX }}
+        if: matrix.runner == 'ubuntu-latest' || matrix.runner == 'macos-latest'
         uses: softprops/action-gh-release@v2
         with:
           fail_on_unmatched_files: true
           prerelease: true
           files: |
-            tripa-${{ matrix.target }}${{ env.BIN_SUFFIX }}
-            decode-batch-${{ matrix.target }}${{ env.BIN_SUFFIX }}
-            SHA512SUMS.txt
+            tripa-${{ matrix.target }}
+            decode-batch-${{ matrix.target }}
+            SHA512SUMS-${{ matrix.target }}.txt
+
+      - name: Release (Windows)
+        if: matrix.runner == 'windows-latest'
+        uses: softprops/action-gh-release@v2
+        with:
+          fail_on_unmatched_files: true
+          prerelease: true
+          files: |
+            tripa-${{ matrix.target }}.exe
+            decode-batch-${{ matrix.target }}.exe
+            SHA512SUMS-${{ matrix.target }}.txt
