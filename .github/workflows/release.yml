@@ -35,11 +35,6 @@ jobs:
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
 
-      - name: Copy config
-        continue-on-error: false
-        working-directory: tripa
-        run: cp -v config_default.toml config.toml
-
       # TODO: Remove true after fix tests
       - name: Test
         run: cargo test --workspace --no-fail-fast || true
