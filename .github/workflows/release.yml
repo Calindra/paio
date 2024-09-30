@@ -35,6 +35,11 @@ jobs:
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
 
+      - name: Copy config
+        continue-on-error: false
+        working-directory: tripa
+        run: cp -v config_default.toml config.toml
+
       # TODO: Remove true after fix tests
       - name: Test
         run: cargo test --workspace --no-fail-fast || true
@@ -109,10 +114,12 @@ jobs:
           curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
           cargo binstall --no-confirm cross
 
+      - name: Copy config
+        working-directory: tripa
+        run: cp -v config_default.toml config.toml
+
       - name: Build
-        run: |
-          cp -v config_default.toml config.toml
-          ${{ matrix.command }} build --release --target ${{ matrix.target }}
+        run: ${{ matrix.command }} build --release --target ${{ matrix.target }}
 
       - name: Generate artifacts
         id: generate-artifacts
