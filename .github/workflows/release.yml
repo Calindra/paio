@@ -58,6 +58,14 @@ jobs:
           #   runner: ubuntu-latest
           #   target: riscv64gc-unknown-linux-gnu
           #   command: cross
+          - name: Linux-arm64
+            runner: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            command: cargo
+          - name: MacOS-amd64
+            runner: macos-latest
+            target: x86_64-apple-darwin
+            command: cargo
           - name: MacOS-arm64
             runner: macos-latest
             target: aarch64-apple-darwin
@@ -101,40 +109,58 @@ jobs:
 
       - name: Build Tripa
         working-directory: tripa
-        shell: bash
         run: |
           cp -v config_default.toml config.toml
           ${{ matrix.command }} build --release --target ${{ matrix.target }}
 
       - name: Build decode-batch
         working-directory: decode-batch
-        shell: bash
         run: ${{ matrix.command }} build --release --target ${{ matrix.target }}
 
       - name: Generate artifacts
         id: generate-artifacts
+        if: matrix.runner == 'ubuntu-latest' || matrix.runner == 'macos-latest'
         shell: bash
         run: |
-          BIN_SUFFIX=""
-          if [[ "${{ matrix.runner }}" == "windows-latest" ]]; then
-            BIN_SUFFIX=".exe"
-          fi
+          cp -v target/${{ matrix.target }}/release/tripa tripa-${{ matrix.target }}
+          cp -v target/${{ matrix.target }}/release/decode-batch decode-batch-${{ matrix.target }}
 
-          echo "BIN_SUFFIX=${BIN_SUFFIX}" >> $GITHUB_ENV
+      - name: Generate artifacts (Windows)
+        if: matrix.runner == 'windows-latest'
+        run: |
+          cp -v target/${{ matrix.target }}/release/tripa.exe tripa-${{ matrix.target }}.exe
+          cp -v target/${{ matrix.target }}/release/decode-batch.exe decode-batch-${{ matrix.target }}.exe
 
-          cp -v target/${{ matrix.target }}/release/tripa${BIN_SUFFIX} tripa-${{ matrix.target }}${BIN_SUFFIX}
-          cp -v target/${{ matrix.target }}/release/decode-batch${BIN_SUFFIX} decode-batch-${{ matrix.target }}${BIN_SUFFIX}
+      - name: Generate checksum (Linux)
+        if: matrix.runner == 'ubuntu-latest'
+        run: sha512sum tripa-${{ matrix.target }} decode-batch-${{ matrix.target }} > SHA512SUMS-${{ matrix.target }}.txt
 
-          sha512sum tripa-${{ matrix.target }}${BIN_SUFFIX} decode-batch-${{ matrix.target }}${BIN_SUFFIX} > SHA512SUMS-${{ matrix.target }}.txt
+      - name: Generate checksum (MacOS)
+        if: matrix.runner == 'macos-latest'
+        run: shasum -a 512 tripa-${{ matrix.target }} decode-batch-${{ matrix.target }} > SHA512SUMS-${{ matrix.target }}.txt
+
+      - name: Generate checksum (Windows)
+        if: matrix.runner == 'windows-latest'
+        run: Get-FileHash tripa-${{ matrix.target }}.exe decode-batch-${{ matrix.target }}.exe -Algorithm SHA512 | Out-File -FilePath SHA512SUMS-${{ matrix.target }}.txt
 
       - name: Release
         uses: softprops/action-gh-release@v2
-        env:
-          BIN_SUFFIX: ${{ steps.generate-artifacts.outputs.BIN_SUFFIX }}
+        if: matrix.runner == 'ubuntu-latest' || matrix.runner == 'macos-latest'
         with:
           fail_on_unmatched_files: true
           prerelease: true
           files: |
-            tripa-${{ matrix.target }}${BIN_SUFFIX}
-            decode-batch-${{ matrix.target }}${BIN_SUFFIX}
+            tripa-${{ matrix.target }}
+            decode-batch-${{ matrix.target }}
+            SHA512SUMS-${{ matrix.target }}.txt
+
+      - name: Release (Windows)
+        if: matrix.runner == 'windows-latest'
+        uses: softprops/action-gh-release@v2
+        with:
+          fail_on_unmatched_files: true
+          prerelease: true
+          files: |
+            tripa-${{ matrix.target }}.exe
+            decode-batch-${{ matrix.target }}.exe
             SHA512SUMS-${{ matrix.target }}.txt
