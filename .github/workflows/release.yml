@@ -18,17 +18,10 @@ jobs:
   test:
     runs-on: ubuntu-latest
 
-    strategy:
-      matrix:
-        project:
-          - tripa
-          - decode-batch
-
     steps:
       - uses: actions/checkout@v4
 
       - name: Install requirements
-        if: ${{ matrix.project }} == 'tripa'
         run: |
           sudo apt-get update
           sudo apt-get install protobuf-compiler
@@ -36,18 +29,18 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Setup Cache
+        uses: Swatinem/rust-cache@v2
+
       - name: Install Foundry
-        if: ${{ matrix.project }} == 'tripa'
         uses: foundry-rs/foundry-toolchain@v1
 
       # TODO: Remove true after fix tests
       - name: Test tripa (Linux)
-        if: ${{ matrix.project }} == 'tripa'
         working-directory: tripa
         run: cargo test --no-fail-fast || true
 
       - name: Test decode-batch (Linux)
-        if: ${{ matrix.project }} == 'decode-batch'
         working-directory: decode-batch
         run: cargo test --no-fail-fast
 
