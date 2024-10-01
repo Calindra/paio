@@ -22,7 +22,7 @@ use celestia_types::{nmt::Namespace, Blob, TxConfig};
 use es_version::SequencerVersion;
 use message::{
     AppNonces, BatchBuilder, EspressoTransaction, SignedTransaction, SigningMessage,
-    SubmitPointTransaction, WalletState, DOMAIN,
+    SubmitPointTransaction, WalletState, WireTransaction, DOMAIN,
 };
 use reqwest;
 use serde::{Deserialize, Serialize};
@@ -32,8 +32,6 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio::task;
 use toml;
-const USE_LOCAL_ANVIL: bool = false;
-const DEPLOY_INPUT_BOX: bool = true;
 
 async fn fund_sequencer(
     signer_address: Address,
@@ -170,6 +168,8 @@ struct Config {
     sequencer_address: Address,
     sequencer_signer_string: String,
     input_box_address: Address,
+    use_local_anvil: bool,
+    deploy_input_box: bool,
     da_layer: DALayer,
     auth_token: String,
     namespace: String,
@@ -349,7 +349,7 @@ async fn main() {
     let mut config: Config = toml::from_str(&config_string).unwrap();
 
     // Create a provider with the HTTP transport using the `reqwest` crate.
-    let (provider, signer) = if USE_LOCAL_ANVIL {
+    let (provider, signer) = if config.use_local_anvil {
         let anvil = Anvil::new().try_spawn().expect("Anvil not working");
         let signer: PrivateKeySigner = anvil.keys()[0].clone().into();
         let rpc_url: String = anvil.endpoint().parse().expect("Could not get Anvil's url");
@@ -386,7 +386,7 @@ async fn main() {
             Box::new(provider.clone()),
         )
         .await;
-        if DEPLOY_INPUT_BOX {
+        if config.deploy_input_box {
             let nonce = provider
                 .get_transaction_count(signer.address())
                 .await
@@ -541,9 +541,8 @@ async fn submit_transaction(
     };
     // TODO: add logic to calculate wei per byte, now it is wei per gas
     // TODO: send the gas logic to the specific DA backend
-    let mut state_lock = state.lock().await;
     // TODO: check gas prices on other DA's
-    if state_lock.config.da_layer == DALayer::EVM {
+    if state.lock().await.config.da_layer == DALayer::EVM {
         let gas_price = match get_gas_price(state.clone()).await {
             Err(e) => return Err((StatusCode::INTERNAL_SERVER_ERROR, e.to_string())),
             Ok(g) => g,
@@ -559,6 +558,7 @@ async fn submit_transaction(
             ));
         }
     }
+    let mut state_lock = state.lock().await;
     let sequencer_address = state_lock.config.sequencer_address.clone();
     let transaction_opt = state_lock
         .wallet_state
@@ -576,6 +576,7 @@ async fn submit_transaction(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use alloy_core::sol_types::SolValue;
     use alloy_signer::SignerSync;
     use axum::{
         body::{Body, Bytes},
@@ -589,20 +590,31 @@ mod tests {
     use serde_json::json;
     use tower::Service;
     use tower::ServiceExt; // for `call`, `oneshot`, and `ready`
-
     async fn mock_lambda() -> Lambda {
         let config_string = fs::read_to_string("config.toml").unwrap();
         let mut config: Config = toml::from_str(&config_string).unwrap();
 
         let wallet_state = mock_state();
 
-        let anvil = Anvil::new().try_spawn().expect("Anvil not working");
-        if USE_LOCAL_ANVIL {
-            let rpc_url: String = anvil.endpoint().parse().expect("Could not get Anvil's url");
-            config.base_url = rpc_url.clone();
-        }
+        let mut anvil = None;
+        let signer = if config.use_local_anvil {
+            anvil = Some(Anvil::new().try_spawn().expect("Anvil not working"));
+            let anvil_instance = anvil.as_ref().unwrap();
 
-        let signer: PrivateKeySigner = anvil.keys()[0].clone().into();
+            let signer: PrivateKeySigner = anvil_instance.keys()[0].clone().into();
+            let rpc_url: String = anvil_instance
+                .endpoint()
+                .parse()
+                .expect("Could not get Anvil's url");
+            config.base_url = rpc_url.clone();
+            signer
+        } else {
+            let signer = config
+                .sequencer_signer_string
+                .parse::<PrivateKeySigner>()
+                .expect("Could not parse sequencer signature");
+            signer
+        };
 
         let sequencer_address = config
             .sequencer_signer_string
@@ -614,42 +626,43 @@ mod tests {
             .wallet(EthereumWallet::from(signer.clone()))
             .on_http(config.base_url.clone().parse().unwrap());
 
-        if DEPLOY_INPUT_BOX {
-            let nonce = provider
-                .get_transaction_count(signer.address())
+        if config.da_layer == DALayer::EVM {
+            if config.deploy_input_box {
+                let nonce = provider
+                    .get_transaction_count(signer.address())
+                    .await
+                    .unwrap();
+                config.input_box_address = InputBox::deploy_builder(provider.clone())
+                    .nonce(nonce)
+                    .from(signer.address())
+                    .deploy()
+                    .await
+                    .unwrap()
+            }
+
+            fund_sequencer(
+                signer.address(),
+                sequencer_address.address(),
+                Box::new(provider.clone()),
+            )
+            .await;
+
+            let balance = provider
+                .get_balance(sequencer_address.address())
                 .await
                 .unwrap();
-            config.input_box_address = InputBox::deploy_builder(provider.clone())
-                .nonce(nonce)
-                .from(signer.address())
-                .deploy()
-                .await
-                .unwrap()
+            println!(
+                "mock_lambda: balance = {:?}, address = {:?}",
+                balance,
+                sequencer_address.address()
+            );
         }
-
-        fund_sequencer(
-            signer.address(),
-            sequencer_address.address(),
-            Box::new(provider.clone()),
-        )
-        .await;
-
-        let balance = provider
-            .get_balance(sequencer_address.address())
-            .await
-            .unwrap();
-        println!(
-            "mock_lambda: balance = {:?}, address = {:?}",
-            balance,
-            sequencer_address.address()
-        );
-
         Lambda {
             wallet_state,
             batch_builder: BatchBuilder::new(config.sequencer_address),
             config,
             provider: Box::new(provider),
-            _anvil_instance: Some(anvil),
+            _anvil_instance: anvil,
         }
     }
 
@@ -716,16 +729,18 @@ mod tests {
 
     #[tokio::test]
     async fn gas() {
-        let (app, _) = app().await;
-        let mut service: RouterIntoService<Body> = app.into_service();
-        let response = ServiceExt::<Request<Body>>::ready(&mut service)
-            .await
-            .unwrap()
-            .call(make_request(false, "/gas", Body::empty()))
-            .await
-            .unwrap();
-        let (status, _body) = extract_parts(response).await;
-        assert_eq!(status, StatusCode::OK);
+        let (app, config) = app().await;
+        if config.lock().await.config.da_layer == DALayer::EVM {
+            let mut service: RouterIntoService<Body> = app.into_service();
+            let response = ServiceExt::<Request<Body>>::ready(&mut service)
+                .await
+                .unwrap()
+                .call(make_request(false, "/gas", Body::empty()))
+                .await
+                .unwrap();
+            let (status, _body) = extract_parts(response).await;
+            assert_eq!(status, StatusCode::OK);
+        }
     }
 
     #[tokio::test]
@@ -742,8 +757,12 @@ mod tests {
 
     #[tokio::test]
     async fn transaction_low_gas() {
-        let (app, _) = app().await;
+        let (app, config) = app().await;
         let transaction = produce_tx(21, 21).to_signed_transaction();
+        let transaction = SubmitPointTransaction {
+            message: alloy_core::primitives::hex::encode(transaction.message.abi_encode_params()),
+            signature: alloy_core::primitives::hex::encode(transaction.signature.as_bytes()),
+        };
         let response = app
             .oneshot(make_request(
                 true,
@@ -753,14 +772,23 @@ mod tests {
             .await
             .unwrap();
         let (status, body) = extract_parts(response).await;
-        assert_eq!(status, StatusCode::PAYMENT_REQUIRED);
-        assert_eq!(&body[0..37], b"Max gas too small, offered 21, needed");
+        if config.lock().await.config.da_layer == DALayer::EVM {
+            assert_eq!(status, StatusCode::PAYMENT_REQUIRED);
+            assert_eq!(&body[0..37], b"Max gas too small, offered 21, needed");
+        } else {
+            assert_eq!(status, StatusCode::NOT_ACCEPTABLE);
+            assert_eq!(&body[..], b"Transaction not valid");
+        }
     }
 
     #[tokio::test]
     async fn transaction_low_balance() {
         let (app, _) = app().await;
         let transaction = produce_tx(21, 2000000000).to_signed_transaction();
+        let transaction = SubmitPointTransaction {
+            message: alloy_core::primitives::hex::encode(transaction.message.abi_encode_params()),
+            signature: alloy_core::primitives::hex::encode(transaction.signature.as_bytes()),
+        };
         let response = app
             .oneshot(make_request(
                 true,
@@ -778,6 +806,10 @@ mod tests {
     async fn transaction_success() {
         let (app, _) = app().await;
         let transaction = produce_tx(0, 2000000000).to_signed_transaction();
+        let transaction = SubmitPointTransaction {
+            message: alloy_core::primitives::hex::encode(transaction.message.abi_encode_params()),
+            signature: alloy_core::primitives::hex::encode(transaction.signature.as_bytes()),
+        };
         let response = app
             .oneshot(make_request(
                 true,
@@ -803,8 +835,12 @@ mod tests {
             .unwrap();
         let (status, body) = extract_parts(response).await;
         assert_eq!(status, StatusCode::OK);
-        assert_eq!(&body[..], b"{\"sequencer_payment_address\":\"0x63f9725f107358c9115bc9d86c72dd5823e9b1e6\",\"txs\":[]}");
+        assert_eq!(&body[..], b"{\"sequencer_payment_address\":\"0x63F9725f107358c9115BC9d86c72dD5823E9B1E6\",\"txs\":[]}");
         let transaction = produce_tx(0, 2000000000).to_signed_transaction();
+        let transaction = SubmitPointTransaction {
+            message: alloy_core::primitives::hex::encode(transaction.message.abi_encode_params()),
+            signature: alloy_core::primitives::hex::encode(transaction.signature.as_bytes()),
+        };
         let response = ServiceExt::<Request<Body>>::ready(&mut service)
             .await
             .unwrap()
@@ -828,7 +864,7 @@ mod tests {
         assert_eq!(status, StatusCode::OK);
         // here we ommit the signature and only look at the first bytes,
         // because the signature changes every time.
-        assert_eq!(&body[0..169], b"{\"sequencer_payment_address\":\"0x63f9725f107358c9115bc9d86c72dd5823e9b1e6\",\"txs\":[{\"message\":{\"app\":\"0x0000000000000000000000000000000000000000\",\"nonce\":0,\"max_gas_price\"");
+        assert_eq!(&body[0..169], b"{\"sequencer_payment_address\":\"0x63F9725f107358c9115BC9d86c72dD5823E9B1E6\",\"txs\":[{\"message\":{\"app\":\"0x0000000000000000000000000000000000000000\",\"nonce\":0,\"max_gas_price\"");
         let mut state_lock = state.lock().await;
         let _batch = state_lock.build_batch().await.unwrap();
 
